@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\ProfileUpdateRequest;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class ProfileController extends Controller
+{
+    /**
+     * Display the user's profile form.
+     */
+    public function edit(Request $request): Response
+    {
+        return Inertia::render('Profile/Edit', [
+            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+            'status' => session('status'),
+        ]);
+    }
+
+    /**
+     * Update the user's profile information.
+     */
+   public function update(Request $request): RedirectResponse // Ubah ProfileUpdateRequest jadi Request biasa kalau mau simpel
+{
+    $user = $request->user();
+
+    // Ambil nilai asli untuk pengecekan perubahan email
+    $originalEmail = $user->email;
+
+    // Ambil manual gendernya jika ada
+    if ($request->has('gender')) {
+        $user->gender = $request->get('gender');
+    }
+
+    $user->name = $request->get('name', $user->name);
+    $user->email = $request->get('email', $user->email);
+
+    // Jika email berubah, hapus tanda verifikasi
+    if ($originalEmail !== $user->email) {
+        $user->email_verified_at = null;
+    }
+
+    $user->save();
+
+    // Kembali ke halaman profile setelah update (sesuai ekspektasi test)
+    return redirect()->route('profile.edit');
+}
+
+    /**
+     * Delete the user's account.
+     */
+    public function destroy(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'password' => ['required', 'current_password'],
+        ]);
+
+        $user = $request->user();
+
+        Auth::logout();
+
+        $user->delete();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return Redirect::to('/');
+    }
+}

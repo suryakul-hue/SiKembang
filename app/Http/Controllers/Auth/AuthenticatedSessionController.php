@@ -1,0 +1,72 @@
+<?php
+
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+use App\Models\DailyReminder; // Atau WeeklyReminder jika sudah kamu ganti
+use Inertia\Inertia;
+use Inertia\Response;
+
+class AuthenticatedSessionController extends Controller
+{
+    /**
+     * Display the login view.
+     */
+    public function create(): Response
+    {
+        return Inertia::render('Auth/Login', [
+            'canResetPassword' => Route::has('password.request'),
+            'status' => session('status'),
+        ]);
+    }
+
+    /**
+     * Handle an incoming authentication request.
+     */
+   public function store(LoginRequest $request): RedirectResponse
+    {
+        $request->authenticate();
+
+        $request->session()->regenerate();
+
+        // LOGIKA PENENTUAN ARAH SETELAH LOGIN
+        // Jika user adalah admin, arahkan ke dashboard admin
+        if ($request->user()->isAdmin()) {
+            return redirect()->route('recipes.admin');
+        }
+
+        // Jika bukan admin, arahkan ke dashboard user seperti biasa
+        return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    /**
+     * Destroy an authenticated session.
+     */
+    public function destroy(Request $request): RedirectResponse
+    {
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+        return redirect('/');
+    }
+    public function index()
+{
+    return Inertia::render('Dashboard', [
+        'dailyReminder' => [
+            'taken_today' => DailyReminder::where('user_id', auth()->id())
+                            ->where('date', today()->toDateString())
+                            ->where('taken_today', true)
+                            ->exists()
+        ],
+        // ... stats lainnya
+    ]);
+}
+}
