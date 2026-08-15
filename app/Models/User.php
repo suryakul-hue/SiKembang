@@ -69,4 +69,17 @@ class User extends Authenticatable
     {
         return $this->role === 'admin';
     }
+
+    /**
+     * Relationships
+     */
+    public function stuntingRecords()
+    {
+        return $this->hasMany(StuntingRecord::class);
+    }
+
+    public function weekReminders()
+    {
+        return $this->hasMany(WeekReminder::class);
+    }
 }

@@ -1,0 +1,122 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'DEPLOYMENT*.md'
+      - 'docs/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          extensions: mbstring, pdo_sqlite, pdo_mysql
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Fix for Shared Hosting with proc_open disabled
+      - name: Install Composer Dependencies (Shared Hosting Compatible)
+        run: |
+          composer install \
+            --prefer-dist \
+            --no-dev \
+            --no-interaction \
+            --optimize-autoloader \
+            --ignore-platform-req=proc-open
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Build Frontend Assets
+        run: npm run build
+
+      - name: Setup Environment File
+        run: |
+          echo "APP_DEBUG=false" > .env.production
+          echo "APP_ENV=production" >> .env.production
+
+      - name: Generate Application Key
+        run: php artisan key:generate --env=production
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            git pull origin main
+            
+            # Install dependencies dengan flag proc_open
+            composer install \
+              --prefer-dist \
+              --no-dev \
+              --no-interaction \
+              --optimize-autoloader \
+              --ignore-platform-req=proc-open
+            
+            # Copy production environment
+            cp .env.production .env
+            
+            # Run migrations
+            php artisan migrate --force
+            
+            # Build assets
+            npm ci
+            npm run build
+            
+            # Cache optimization
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # Clear caches
+            php artisan cache:clear
+            php artisan session:flush
+            
+            # Storage link
+            php artisan storage:link || true
+            
+            # Permissions
+            chmod -R 755 storage bootstrap/cache
+            chown -R www-data:www-data storage bootstrap/cache
+
+      - name: Verify Deployment
+        run: echo "✅ Deployment completed successfully!"
+
+      - name: Notify Slack (Optional)
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "SiKembang Deployment: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*SiKembang Deployment*\nStatus: *${{ job.status }}*\nCommit: ${{ github.sha }}\nAuthor: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

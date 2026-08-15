@@ -8,7 +8,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use App\Models\DailyReminder; // Atau WeeklyReminder jika sudah kamu ganti
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,16 +56,4 @@ class AuthenticatedSessionController extends Controller
 
         return redirect('/');
     }
-    public function index()
-{
-    return Inertia::render('Dashboard', [
-        'dailyReminder' => [
-            'taken_today' => DailyReminder::where('user_id', auth()->id())
-                            ->where('date', today()->toDateString())
-                            ->where('taken_today', true)
-                            ->exists()
-        ],
-        // ... stats lainnya
-    ]);
-}
 }
